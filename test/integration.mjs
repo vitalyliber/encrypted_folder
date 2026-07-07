@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 
@@ -30,6 +30,13 @@ async function waitForApi() {
 
 function dockerExec(command) {
   return execFileSync('docker', ['compose', 'exec', '-T', 'encrypted-folder', 'sh', '-lc', command], {
+    cwd: process.cwd(),
+    encoding: 'utf8',
+  });
+}
+
+function dockerCompose(args) {
+  return execFileSync('docker', ['compose', ...args], {
     cwd: process.cwd(),
     encoding: 'utf8',
   });
@@ -175,9 +182,45 @@ async function testHostAddedFileOverwritesExistingVaultFile() {
   }
 }
 
+async function testShutdownLocksVaultAndStartupCleansUnlocked() {
+  const name = 'it-shutdown';
+  const strayName = 'it-startup-stray';
+
+  await createVault(name);
+  try {
+    await unlock(name);
+    dockerExec(`printf graceful-shutdown > /data/unlocked/${name}/shutdown.txt`);
+
+    dockerCompose(['stop', '-t', '60', 'encrypted-folder']);
+    assert.equal(existsSync(path.join('data', 'unlocked', name)), false);
+
+    const strayDir = path.join('data', 'unlocked', strayName);
+    mkdirSync(strayDir, { recursive: true });
+    writeFileSync(path.join(strayDir, 'plaintext.txt'), 'remove-me');
+
+    dockerCompose(['up', '-d', 'encrypted-folder']);
+    await waitForApi();
+    assert.equal(existsSync(strayDir), false);
+
+    await unlock(name);
+    const contents = dockerExec(`cat /data/unlocked/${name}/shutdown.txt`);
+    assert.equal(contents, 'graceful-shutdown');
+  } finally {
+    try {
+      dockerCompose(['up', '-d', 'encrypted-folder']);
+      await waitForApi();
+      await deleteVault(name);
+    } finally {
+      rmSync(path.join('data', 'unlocked', name), { recursive: true, force: true });
+      rmSync(path.join('data', 'unlocked', strayName), { recursive: true, force: true });
+    }
+  }
+}
+
 await waitForApi();
 await testMountedFilesSurviveLock();
 await testPlaintextAddedWhileNotMountedIsImported();
 await testBinaryFilesSurviveLock();
 await testHostAddedFileOverwritesExistingVaultFile();
+await testShutdownLocksVaultAndStartupCleansUnlocked();
 console.log('integration tests passed');

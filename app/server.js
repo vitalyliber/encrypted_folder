@@ -17,6 +17,7 @@ const PORT = Number(process.env.PORT || 3000);
 mkdirSync(VAULTS_DIR, { recursive: true });
 mkdirSync(MOUNTS_DIR, { recursive: true });
 mkdirSync(IMPORTS_DIR, { recursive: true });
+chmodSync(MOUNTS_DIR, 0o777);
 
 const app = Fastify({ logger: true });
 await app.register(fastifyStatic, {
@@ -24,6 +25,7 @@ await app.register(fastifyStatic, {
 });
 
 const unlockedPasswords = new Map();
+let shuttingDown = false;
 
 function safeName(name) {
   if (!/^[a-zA-Z0-9._-]{1,64}$/.test(name || '')) throw new Error('Use only letters, numbers, dot, underscore and dash. Max 64 chars.');
@@ -121,6 +123,24 @@ function pendingImportPath(name) {
   return path.join(IMPORTS_DIR, matches[0]);
 }
 
+async function cleanUnlockedDirOnStartup() {
+  for (const entry of readdirSync(MOUNTS_DIR)) {
+    const entryPath = path.join(MOUNTS_DIR, entry);
+    try {
+      await unmount(entryPath);
+    } catch (e) {
+      app.log.debug({ err: e, path: entryPath }, 'Unlocked folder was not mounted during startup cleanup');
+    }
+    try {
+      rmSync(entryPath, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+    } catch (e) {
+      app.log.error({ err: e, path: entryPath }, 'Failed to remove unlocked folder during startup cleanup');
+      throw e;
+    }
+  }
+  chmodSync(MOUNTS_DIR, 0o777);
+}
+
 async function mountVault(encryptedPath, mountPath, password) {
   await run('gocryptfs', ['-allow_other', encryptedPath, mountPath], { input: `${password}\n` });
   chmodSync(mountPath, 0o777);
@@ -171,6 +191,45 @@ async function prepareMountDir(mountPath, name) {
     const importPath = await movePlaintextAside(mountPath, name);
     mkdirSync(mountPath, { recursive: true });
     return importPath;
+  }
+}
+
+async function lockVault(name) {
+  const encryptedPath = path.join(VAULTS_DIR, name);
+  const mountPath = path.join(MOUNTS_DIR, name);
+  if (!existsSync(encryptedPath)) throw new Error('Vault not found.');
+
+  if (!await isMountPoint(mountPath)) {
+    const importPath = await movePlaintextAside(mountPath, name);
+    const encryptedImport = await encryptPlaintextImport(name, encryptedPath, mountPath, importPath);
+    if (encryptedImport) unlockedPasswords.delete(name);
+    return { ok: true, pendingImport: Boolean(importPath && !encryptedImport), encryptedImport };
+  }
+
+  await unmount(mountPath);
+  const importPath = await movePlaintextAside(mountPath, name);
+  const encryptedImport = await encryptPlaintextImport(name, encryptedPath, mountPath, importPath);
+  unlockedPasswords.delete(name);
+  return { ok: true, pendingImport: Boolean(importPath && !encryptedImport), encryptedImport };
+}
+
+async function lockAllVaultsForShutdown() {
+  const names = new Set(unlockedPasswords.keys());
+  for (const name of readdirSync(MOUNTS_DIR)) {
+    try {
+      if (await isMountPoint(path.join(MOUNTS_DIR, name))) names.add(name);
+    } catch (e) {
+      app.log.warn({ err: e, name }, 'Failed to inspect unlocked folder during shutdown');
+    }
+  }
+
+  for (const name of names) {
+    try {
+      const result = await lockVault(name);
+      app.log.info({ name, result }, 'Locked vault during shutdown');
+    } catch (e) {
+      app.log.error({ err: e, name }, 'Failed to lock vault during shutdown');
+    }
   }
 }
 
@@ -236,18 +295,7 @@ app.post('/api/vaults/:name/unlock', async (req, reply) => {
 app.post('/api/vaults/:name/lock', async (req, reply) => {
   try {
     const name = safeName(req.params.name);
-    const encryptedPath = path.join(VAULTS_DIR, name);
-    const mountPath = path.join(MOUNTS_DIR, name);
-    if (!await isMountPoint(mountPath)) {
-      const importPath = await movePlaintextAside(mountPath, name);
-      const encryptedImport = await encryptPlaintextImport(name, encryptedPath, mountPath, importPath);
-      return { ok: true, pendingImport: Boolean(importPath && !encryptedImport), encryptedImport };
-    }
-    await unmount(mountPath);
-    const importPath = await movePlaintextAside(mountPath, name);
-    const encryptedImport = await encryptPlaintextImport(name, encryptedPath, mountPath, importPath);
-    unlockedPasswords.delete(name);
-    return { ok: true, pendingImport: Boolean(importPath && !encryptedImport), encryptedImport };
+    return await lockVault(name);
   } catch (e) {
     reply.code(400);
     return { ok: false, error: e.message };
@@ -271,4 +319,20 @@ app.delete('/api/vaults/:name', async (req, reply) => {
   }
 });
 
-app.listen({ port: PORT, host: '0.0.0.0' });
+async function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  app.log.info({ signal }, 'Shutting down');
+  try {
+    await lockAllVaultsForShutdown();
+  } finally {
+    await app.close();
+    process.exit(0);
+  }
+}
+
+process.once('SIGTERM', () => { void shutdown('SIGTERM'); });
+process.once('SIGINT', () => { void shutdown('SIGINT'); });
+
+await cleanUnlockedDirOnStartup();
+await app.listen({ port: PORT, host: '0.0.0.0' });
