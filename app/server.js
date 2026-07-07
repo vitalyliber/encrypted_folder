@@ -1,7 +1,7 @@
 import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync, rmSync, rmdirSync, statSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, renameSync, rmSync, rmdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -11,10 +11,12 @@ const __dirname = path.dirname(__filename);
 const DATA_DIR = process.env.DATA_DIR || '/data';
 const VAULTS_DIR = process.env.VAULTS_DIR || path.join(DATA_DIR, 'vaults');
 const MOUNTS_DIR = process.env.MOUNTS_DIR || path.join(DATA_DIR, 'unlocked');
+const IMPORTS_DIR = process.env.IMPORTS_DIR || path.join(DATA_DIR, 'pending-imports');
 const PORT = Number(process.env.PORT || 3000);
 
 mkdirSync(VAULTS_DIR, { recursive: true });
 mkdirSync(MOUNTS_DIR, { recursive: true });
+mkdirSync(IMPORTS_DIR, { recursive: true });
 
 const app = Fastify({ logger: true });
 await app.register(fastifyStatic, {
@@ -83,6 +85,28 @@ function removeMountDir(mountPath) {
   }
 }
 
+function movePlaintextAside(mountPath, name) {
+  if (!existsSync(mountPath)) return null;
+  try {
+    rmdirSync(mountPath);
+    return null;
+  } catch (e) {
+    if (e.code === 'ENOENT') return null;
+    if (e.code !== 'ENOTEMPTY' && e.code !== 'EEXIST') throw e;
+  }
+
+  const importPath = path.join(IMPORTS_DIR, `${name}-${Date.now()}`);
+  renameSync(mountPath, importPath);
+  return importPath;
+}
+
+function importPlaintext(importPath, mountPath) {
+  if (!importPath) return false;
+  cpSync(importPath, mountPath, { recursive: true, force: false, errorOnExist: true });
+  rmSync(importPath, { recursive: true, force: true });
+  return true;
+}
+
 async function ensureMountDir(mountPath) {
   try {
     if (existsSync(mountPath) && !await isMountPoint(mountPath)) {
@@ -94,6 +118,24 @@ async function ensureMountDir(mountPath) {
     await unmount(mountPath);
     removeMountDir(mountPath);
     mkdirSync(mountPath, { recursive: true });
+  }
+}
+
+async function prepareMountDir(mountPath, name) {
+  try {
+    if (existsSync(mountPath) && !await isMountPoint(mountPath)) {
+      const importPath = movePlaintextAside(mountPath, name);
+      mkdirSync(mountPath, { recursive: true });
+      return importPath;
+    }
+    mkdirSync(mountPath, { recursive: true });
+    return null;
+  } catch (e) {
+    if (e.code !== 'ENOTCONN') throw e;
+    await unmount(mountPath);
+    const importPath = movePlaintextAside(mountPath, name);
+    mkdirSync(mountPath, { recursive: true });
+    return importPath;
   }
 }
 
@@ -138,15 +180,17 @@ app.post('/api/vaults/:name/unlock', async (req, reply) => {
     const encryptedPath = path.join(VAULTS_DIR, name);
     const mountPath = path.join(MOUNTS_DIR, name);
     if (!existsSync(encryptedPath)) throw new Error('Vault not found.');
-    await ensureMountDir(mountPath);
+    const importPath = await prepareMountDir(mountPath, name);
     if (await isMountPoint(mountPath)) return { ok: true, alreadyUnlocked: true };
     try {
       await run('gocryptfs', ['-allow_other', encryptedPath, mountPath], { input: `${password}\n` });
+      const importedPlaintext = importPlaintext(importPath, mountPath);
+      return { ok: true, unlockedPath: mountPath, importedPlaintext };
     } catch (e) {
       removeMountDir(mountPath);
+      if (importPath && existsSync(importPath) && !existsSync(mountPath)) renameSync(importPath, mountPath);
       throw e;
     }
-    return { ok: true, unlockedPath: mountPath };
   } catch (e) {
     reply.code(400);
     return { ok: false, error: e.message };
