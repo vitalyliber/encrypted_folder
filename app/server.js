@@ -23,6 +23,8 @@ await app.register(fastifyStatic, {
   root: path.join(__dirname, '..', 'public'),
 });
 
+const unlockedPasswords = new Map();
+
 function safeName(name) {
   if (!/^[a-zA-Z0-9._-]{1,64}$/.test(name || '')) throw new Error('Use only letters, numbers, dot, underscore and dash. Max 64 chars.');
   return name;
@@ -119,6 +121,26 @@ function pendingImportPath(name) {
   return path.join(IMPORTS_DIR, matches[0]);
 }
 
+async function mountVault(encryptedPath, mountPath, password) {
+  await run('gocryptfs', ['-allow_other', encryptedPath, mountPath], { input: `${password}\n` });
+}
+
+async function encryptPlaintextImport(name, encryptedPath, mountPath, importPath) {
+  if (!importPath) return false;
+  const password = unlockedPasswords.get(name);
+  if (!password) return false;
+
+  mkdirSync(mountPath, { recursive: true });
+  try {
+    await mountVault(encryptedPath, mountPath, password);
+    importPlaintext(importPath, mountPath);
+  } finally {
+    if (await isMountPoint(mountPath)) await unmount(mountPath);
+    removeMountDir(mountPath);
+  }
+  return true;
+}
+
 async function ensureMountDir(mountPath) {
   try {
     if (existsSync(mountPath) && !await isMountPoint(mountPath)) {
@@ -195,7 +217,8 @@ app.post('/api/vaults/:name/unlock', async (req, reply) => {
     const importPath = await prepareMountDir(mountPath, name) || pendingImportPath(name);
     if (await isMountPoint(mountPath)) return { ok: true, alreadyUnlocked: true };
     try {
-      await run('gocryptfs', ['-allow_other', encryptedPath, mountPath], { input: `${password}\n` });
+      await mountVault(encryptedPath, mountPath, password);
+      unlockedPasswords.set(name, password);
       const importedPlaintext = importPlaintext(importPath, mountPath);
       return { ok: true, unlockedPath: mountPath, importedPlaintext };
     } catch (e) {
@@ -212,14 +235,18 @@ app.post('/api/vaults/:name/unlock', async (req, reply) => {
 app.post('/api/vaults/:name/lock', async (req, reply) => {
   try {
     const name = safeName(req.params.name);
+    const encryptedPath = path.join(VAULTS_DIR, name);
     const mountPath = path.join(MOUNTS_DIR, name);
     if (!await isMountPoint(mountPath)) {
       const importPath = await movePlaintextAside(mountPath, name);
-      return { ok: true, pendingImport: Boolean(importPath) };
+      const encryptedImport = await encryptPlaintextImport(name, encryptedPath, mountPath, importPath);
+      return { ok: true, pendingImport: Boolean(importPath && !encryptedImport), encryptedImport };
     }
     await unmount(mountPath);
     const importPath = await movePlaintextAside(mountPath, name);
-    return { ok: true, pendingImport: Boolean(importPath) };
+    const encryptedImport = await encryptPlaintextImport(name, encryptedPath, mountPath, importPath);
+    unlockedPasswords.delete(name);
+    return { ok: true, pendingImport: Boolean(importPath && !encryptedImport), encryptedImport };
   } catch (e) {
     reply.code(400);
     return { ok: false, error: e.message };
@@ -231,6 +258,7 @@ app.delete('/api/vaults/:name', async (req, reply) => {
     const name = safeName(req.params.name);
     const encryptedPath = path.join(VAULTS_DIR, name);
     const mountPath = path.join(MOUNTS_DIR, name);
+    unlockedPasswords.delete(name);
     if (!existsSync(encryptedPath) && !existsSync(mountPath)) return { ok: true };
     if (existsSync(mountPath)) await unmount(mountPath);
     rmSync(encryptedPath, { recursive: true, force: true });

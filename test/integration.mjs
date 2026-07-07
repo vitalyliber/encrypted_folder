@@ -70,8 +70,8 @@ async function testMountedFilesSurviveLock() {
     dockerExec(`printf survives-lock > /data/unlocked/${name}/keep.txt`);
 
     await lock(name);
-    const unlockedTree = dockerExec('find /data/unlocked -maxdepth 2 -print');
-    assert(!unlockedTree.includes(`/data/unlocked/${name}/keep.txt`));
+    const stillVisible = dockerExec(`[ -e /data/unlocked/${name}/keep.txt ] && echo yes || echo no`).trim();
+    assert.equal(stillVisible, 'no');
 
     await unlock(name);
     const contents = dockerExec(`cat /data/unlocked/${name}/keep.txt`);
@@ -119,11 +119,17 @@ async function testBinaryFilesSurviveLock() {
 
   await createVault(name);
   try {
+    await unlock(name);
     mkdirSync(path.dirname(binaryPath), { recursive: true });
     writeFileSync(binaryPath, binaryBytes);
     const before = sha256(binaryPath);
 
-    await lock(name);
+    const lockResult = await lock(name);
+    assert.equal(lockResult.pendingImport, false);
+    assert.equal(lockResult.encryptedImport, true);
+    const pendingTree = dockerExec(`find /data/pending-imports -maxdepth 2 -name '${name}-*' -print`);
+    assert.equal(pendingTree, '');
+
     await unlock(name);
 
     const importedHash = dockerExec(`sha256sum /data/unlocked/${name}/image.bin | cut -d' ' -f1`).trim();
