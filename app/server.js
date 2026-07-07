@@ -55,23 +55,44 @@ async function isMountPoint(dir) {
 }
 
 async function unmount(mountPath) {
+  let lastError;
   try {
     await run('fusermount3', ['-u', mountPath]);
   } catch (e) {
-    try { await run('umount', ['-l', mountPath]); } catch {}
+    lastError = e;
+    try {
+      await run('umount', ['-l', mountPath]);
+    } catch (fallbackError) {
+      lastError = fallbackError;
+    }
+  }
+  if (await isMountPoint(mountPath)) {
+    throw lastError || new Error(`Failed to unmount ${mountPath}`);
+  }
+}
+
+function removeMountDir(mountPath) {
+  try {
+    rmdirSync(mountPath);
+  } catch (e) {
+    if (e.code === 'ENOENT') return;
+    if (e.code === 'ENOTEMPTY' || e.code === 'EEXIST') {
+      throw new Error(`Unlocked folder ${mountPath} contains files but is not mounted. Refusing to delete unencrypted files.`);
+    }
+    throw e;
   }
 }
 
 async function ensureMountDir(mountPath) {
   try {
     if (existsSync(mountPath) && !await isMountPoint(mountPath)) {
-      rmSync(mountPath, { recursive: true, force: true });
+      removeMountDir(mountPath);
     }
     mkdirSync(mountPath, { recursive: true });
   } catch (e) {
     if (e.code !== 'ENOTCONN') throw e;
     await unmount(mountPath);
-    rmSync(mountPath, { recursive: true, force: true });
+    removeMountDir(mountPath);
     mkdirSync(mountPath, { recursive: true });
   }
 }
@@ -122,7 +143,7 @@ app.post('/api/vaults/:name/unlock', async (req, reply) => {
     try {
       await run('gocryptfs', ['-allow_other', encryptedPath, mountPath], { input: `${password}\n` });
     } catch (e) {
-      rmSync(mountPath, { recursive: true, force: true });
+      removeMountDir(mountPath);
       throw e;
     }
     return { ok: true, unlockedPath: mountPath };
@@ -136,9 +157,8 @@ app.post('/api/vaults/:name/lock', async (req, reply) => {
   try {
     const name = safeName(req.params.name);
     const mountPath = path.join(MOUNTS_DIR, name);
-    if (!existsSync(mountPath)) return { ok: true };
     await unmount(mountPath);
-    rmSync(mountPath, { recursive: true, force: true });
+    removeMountDir(mountPath);
     return { ok: true };
   } catch (e) {
     reply.code(400);
