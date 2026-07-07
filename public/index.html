@@ -25,9 +25,12 @@
     .hidden { display:none; }
     .pathbar { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:10px 0 18px; }
     .pathbar button { margin:0; padding:7px 10px; background:#20283a; color:#eef2ff; }
+    .browser-controls { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:0 0 18px; }
+    .browser-controls select { background:#0e1118; color:#eef2ff; border:1px solid #394153; border-radius:10px; padding:9px; }
     .browser-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:12px; }
-    .entry { min-height:138px; border:1px solid #2a3142; border-radius:8px; background:#151a24; color:#eef2ff; overflow:hidden; text-align:left; }
+    .entry { position:relative; min-height:138px; border:1px solid #2a3142; border-radius:8px; background:#151a24; color:#eef2ff; overflow:hidden; text-align:left; }
     .entry button, .entry a { width:100%; height:100%; min-height:138px; padding:0; margin:0; background:transparent; color:inherit; border:0; text-decoration:none; cursor:pointer; display:flex; flex-direction:column; }
+    .entry .play-from { position:absolute; right:8px; top:8px; width:auto; height:auto; min-height:0; padding:7px 9px; border-radius:999px; background:rgba(16,19,26,.82); color:#fff; z-index:2; }
     .thumb { height:102px; background:#0e1118; display:flex; align-items:center; justify-content:center; color:#aab2c5; font-size:34px; overflow:hidden; }
     .thumb img { width:100%; height:100%; object-fit:cover; display:block; }
     .entry-name { padding:10px; overflow-wrap:anywhere; font-size:14px; }
@@ -78,12 +81,27 @@
       <button class="secondary" onclick="goHome()">Back to vaults</button>
     </div>
     <div id="breadcrumbs" class="pathbar"></div>
+    <div class="browser-controls">
+      <button id="slideshowButton" class="primary" type="button" onclick="startSlideshowFromFirst()">Slideshow</button>
+      <label class="muted" for="slideshowInterval">Interval</label>
+      <select id="slideshowInterval">
+        <option value="2000">2 sec</option>
+        <option value="3000" selected>3 sec</option>
+        <option value="5000">5 sec</option>
+        <option value="8000">8 sec</option>
+        <option value="10000">10 sec</option>
+      </select>
+    </div>
     <div id="fileGrid" class="browser-grid"></div>
   </section>
 
 <script>
 const state = { vault: null, path: '' };
 const imageExtensions = /\.(avif|bmp|gif|jpe?g|png|svg|webp)$/i;
+window.currentImageCount = 0;
+window.galleryLightbox = null;
+window.slideshowTimer = null;
+window.slideshowRunning = false;
 
 async function api(url, options = {}) {
   const fetchOptions = { ...options };
@@ -148,6 +166,7 @@ function openFolderEncoded(vault, folderPath = '') {
 }
 
 function showHome() {
+  if (window.stopSlideshow) window.stopSlideshow();
   document.getElementById('homeView').classList.remove('hidden');
   document.getElementById('browserView').classList.add('hidden');
 }
@@ -297,12 +316,17 @@ async function openFolder(vault, folderPath = '', updateHash = true) {
 }
 
 function renderEntries(entries) {
+  if (window.stopSlideshow) window.stopSlideshow();
   if (entries.length === 0) {
+    window.currentImageCount = 0;
+    document.getElementById('slideshowButton').disabled = true;
     document.getElementById('fileGrid').innerHTML = '<div class="empty">This folder is empty.</div>';
     return;
   }
 
   const galleryIndex = entries.filter(entry => entry.isImage).map(entry => entry.path);
+  window.currentImageCount = galleryIndex.length;
+  document.getElementById('slideshowButton').disabled = window.currentImageCount === 0;
   document.getElementById('fileGrid').innerHTML = entries.map(entry => {
     if (entry.type === 'directory') {
       const preview = entry.previewUrl
@@ -322,6 +346,7 @@ function renderEntries(entries) {
       const index = galleryIndex.indexOf(entry.path);
       return `
         <div class="entry">
+          <button class="play-from" type="button" title="Start slideshow from this image" onclick="startSlideshowFrom(${index})">Play</button>
           <a href="${entry.url}" class="gallery-image" data-index="${index}" data-pswp-width="1600" data-pswp-height="1200">
             <div class="thumb"><img src="${entry.url}" loading="lazy" alt="${escapeHtml(entry.name)}" onload="setPhotoSize(this)" /></div>
             <div class="entry-name">${escapeHtml(entry.name)}</div>
@@ -350,24 +375,97 @@ function setPhotoSize(img) {
   anchor.dataset.pswpHeight = String(img.naturalHeight);
 }
 
+function slideshowIntervalMs() {
+  return Number(document.getElementById('slideshowInterval')?.value || 3000);
+}
+
+function updateSlideshowButtons() {
+  document.querySelectorAll('.pswp__button--slideshow').forEach(button => {
+    button.textContent = window.slideshowRunning ? 'Pause' : 'Play';
+    button.setAttribute('aria-label', window.slideshowRunning ? 'Pause slideshow' : 'Start slideshow');
+  });
+  const button = document.getElementById('slideshowButton');
+  if (button) button.textContent = window.slideshowRunning ? 'Stop slideshow' : 'Slideshow';
+}
+
+window.stopSlideshow = function stopSlideshow() {
+  if (window.slideshowTimer) clearInterval(window.slideshowTimer);
+  window.slideshowTimer = null;
+  window.slideshowRunning = false;
+  updateSlideshowButtons();
+};
+
+function playSlideshow() {
+  window.stopSlideshow();
+  const pswp = window.galleryLightbox?.pswp;
+  if (!pswp || window.currentImageCount < 1) return;
+  window.slideshowRunning = true;
+  window.slideshowTimer = setInterval(() => {
+    if (!window.galleryLightbox?.pswp) {
+      window.stopSlideshow();
+      return;
+    }
+    window.galleryLightbox.pswp.next();
+  }, slideshowIntervalMs());
+  updateSlideshowButtons();
+}
+
+window.startSlideshowFrom = function startSlideshowFrom(index) {
+  const images = Array.from(document.querySelectorAll('a.gallery-image'));
+  if (!images.length) return;
+  const image = images[Math.max(0, Math.min(index, images.length - 1))];
+  image.click();
+  setTimeout(playSlideshow, 150);
+};
+
+window.startSlideshowFromFirst = function startSlideshowFromFirst() {
+  if (window.slideshowRunning) {
+    window.stopSlideshow();
+    return;
+  }
+  window.startSlideshowFrom(0);
+};
+
 window.addEventListener('hashchange', route);
 route();
 </script>
 <script type="module">
-import PhotoSwipeLightbox from 'https://unpkg.com/photoswipe@5/dist/photoswipe-lightbox.esm.js';
-import PhotoSwipe from 'https://unpkg.com/photoswipe@5/dist/photoswipe.esm.js';
+try {
+  const [{ default: PhotoSwipeLightbox }, { default: PhotoSwipe }] = await Promise.all([
+    import('https://unpkg.com/photoswipe@5/dist/photoswipe-lightbox.esm.js'),
+    import('https://unpkg.com/photoswipe@5/dist/photoswipe.esm.js'),
+  ]);
 
-let lightbox;
-window.attachGallery = function attachGallery() {
-  if (lightbox) lightbox.destroy();
-  lightbox = new PhotoSwipeLightbox({
-    gallery: '#fileGrid',
-    children: 'a.gallery-image',
-    pswpModule: PhotoSwipe,
-  });
-  lightbox.init();
-};
-if (document.querySelector('a.gallery-image')) window.attachGallery();
+  window.attachGallery = function attachGallery() {
+    if (window.galleryLightbox) window.galleryLightbox.destroy();
+    window.stopSlideshow();
+    window.galleryLightbox = new PhotoSwipeLightbox({
+      gallery: '#fileGrid',
+      children: 'a.gallery-image',
+      loop: true,
+      pswpModule: PhotoSwipe,
+    });
+    window.galleryLightbox.on('uiRegister', () => {
+      window.galleryLightbox.pswp.ui.registerElement({
+        name: 'slideshow',
+        order: 9,
+        isButton: true,
+        tagName: 'button',
+        html: 'Play',
+        onClick: () => {
+          if (window.slideshowRunning) window.stopSlideshow();
+          else playSlideshow();
+        },
+      });
+    });
+    window.galleryLightbox.on('close', () => window.stopSlideshow());
+    window.galleryLightbox.init();
+    updateSlideshowButtons();
+  };
+  if (document.querySelector('a.gallery-image')) window.attachGallery();
+} catch (error) {
+  console.error('PhotoSwipe failed to load', error);
+}
 </script>
 </body>
 </html>
