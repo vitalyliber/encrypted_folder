@@ -1,7 +1,7 @@
 import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
 import { spawn } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, readdirSync, renameSync, rmSync, rmdirSync, statSync } from 'node:fs';
+import { chmodSync, cpSync, existsSync, mkdirSync, readdirSync, renameSync, rmSync, rmdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -123,6 +123,7 @@ function pendingImportPath(name) {
 
 async function mountVault(encryptedPath, mountPath, password) {
   await run('gocryptfs', ['-allow_other', encryptedPath, mountPath], { input: `${password}\n` });
+  chmodSync(mountPath, 0o777);
 }
 
 async function encryptPlaintextImport(name, encryptedPath, mountPath, importPath) {
