@@ -6,6 +6,9 @@ services:
     stop_grace_period: 2m
     ports:
       - "3009:3000"
+    environment:
+      MOUNTS_DIR: /umbrel-home/Encrypted Folder/Unlocked
+      FILE_BROWSER_MOUNTS_PATH: /Home/Encrypted Folder/Unlocked
     devices:
       - /dev/fuse:/dev/fuse
     cap_add:
@@ -14,3 +17,4 @@ services:
       - apparmor:unconfined
     volumes:
       - ./data:/data:rshared
+      - ${UMBREL_ROOT}/home:/umbrel-home:rshared

@@ -11,7 +11,8 @@ only in encrypted form.
 
 - Creates encrypted vaults with `gocryptfs`.
 - Shows vaults in a simple browser UI.
-- Unlocks a vault into `data/unlocked/<vault-name>`.
+- Unlocks a vault into `Home / Encrypted Folder / Unlocked / <vault-name>` on
+  Umbrel OS.
 - Locks a vault without asking for the password again during the same app
   session.
 - Preserves files added through Umbrel File Browser while a vault is unlocked.
@@ -19,7 +20,7 @@ only in encrypted form.
 - Provides a built-in read-only browser for unlocked folders.
 - Opens image folders in a PhotoSwipe gallery with swipe navigation.
 - Tries to lock open vaults automatically when the container is stopped.
-- Deletes leftover `data/unlocked/*` folders on startup for safety.
+- Deletes leftover unlocked folders on startup for safety.
 
 ## Folder Layout
 
@@ -27,33 +28,37 @@ only in encrypted form.
 data/
   vaults/
     <vault-name>/        # encrypted gocryptfs storage
-  unlocked/
-    <vault-name>/        # decrypted FUSE mount while unlocked
   pending-imports/
     <vault-name>-.../    # temporary import staging, only for recovery cases
+
+Home/
+  Encrypted Folder/
+    Unlocked/
+      <vault-name>/      # decrypted FUSE mount while unlocked on Umbrel OS
 ```
 
-Back up `data/vaults`, not `data/unlocked`.
+Back up `data/vaults`, not `Home / Encrypted Folder / Unlocked`.
 
-`data/unlocked` is a working view, not the source of truth. The encrypted vault
-in `data/vaults/<vault-name>` is the durable storage.
+`Home / Encrypted Folder / Unlocked` is a working view, not the source of truth.
+The encrypted vault in `data/vaults/<vault-name>` is the durable storage.
 
 ## What Happens In `unlocked`
 
 When a vault is unlocked, the app runs `gocryptfs` and mounts:
 
 ```text
-data/vaults/<vault-name>    ->    data/unlocked/<vault-name>
+data/vaults/<vault-name>    ->    Home/Encrypted Folder/Unlocked/<vault-name>
 ```
 
-`data/unlocked/<vault-name>` is not a normal copy of the files. It is also not a
-folder full of symlinks. It is a FUSE mount point.
+`Home / Encrypted Folder / Unlocked / <vault-name>` is not a normal copy of the
+files. It is also not a folder full of symlinks. It is a FUSE mount point.
 
 That means:
 
 - The encrypted files physically live in `data/vaults/<vault-name>`.
 - The readable filenames and file contents appear through
-  `data/unlocked/<vault-name>` only while the vault is mounted.
+  `Home / Encrypted Folder / Unlocked / <vault-name>` only while the vault is
+  mounted.
 - When an app or File Browser reads a file from `unlocked`, `gocryptfs`
   decrypts the needed blocks on demand.
 - When an app or File Browser writes a file into `unlocked`, `gocryptfs`
@@ -66,8 +71,8 @@ files is mostly mounting and checking the password, not copying or decrypting
 every byte.
 
 On lock, the app unmounts the FUSE filesystem. After that,
-`data/unlocked/<vault-name>` is removed, and the readable files should no longer
-be visible.
+`Home / Encrypted Folder / Unlocked / <vault-name>` is removed, and the readable
+files should no longer be visible.
 
 ## Lock And Unlock Flow
 
@@ -87,7 +92,7 @@ files, logs, environment variables, or disk by this app.
 The app mounts the encrypted vault to:
 
 ```text
-data/unlocked/<vault-name>
+Home / Encrypted Folder / Unlocked / <vault-name>
 ```
 
 The password is kept only in the app process memory while the vault is unlocked.
@@ -100,7 +105,7 @@ The app:
 
 1. Unmounts the FUSE mount.
 2. Checks whether any plaintext files were left in the underlying
-   `data/unlocked/<vault-name>` directory.
+   unlocked mount directory.
 3. If needed, remounts the vault with the in-memory password.
 4. Copies those plaintext files through the mounted encrypted view.
 5. Unmounts again.
@@ -130,38 +135,47 @@ On startup, the app removes everything inside:
 data/unlocked/
 ```
 
-This is intentional. `unlocked` is treated as unsafe plaintext working space.
-If the previous process died unexpectedly, the next start cleans that directory
-so readable files are not left lying around.
+On Umbrel OS this is:
+
+```text
+Home / Encrypted Folder / Unlocked
+```
+
+This is intentional. `Unlocked` is treated as unsafe plaintext working space. If
+the previous process died unexpectedly, the next start cleans that directory so
+readable files are not left lying around.
 
 Important limitation: graceful shutdown only works if the app receives a normal
 stop signal. If the machine loses power, Docker is killed hard, or the process is
 terminated with `SIGKILL`, the app cannot run cleanup code before exit. The next
-startup still cleans `data/unlocked`.
+startup still cleans the unlocked folder.
+startup still cleans the unlocked folder.
 
 ## Umbrel File Browser
 
 On Umbrel OS, open File Browser and look under:
 
 ```text
-Apps / vitalyliber-encrypted-folder / data
+Home / Encrypted Folder / Unlocked / <vault-name>
 ```
 
-Use:
+This is the folder where you read and add normal files after unlocking a vault.
+The app also shows an `Open in Umbrel Files` button next to every unlocked vault,
+which opens this folder directly.
 
-```text
-Apps / vitalyliber-encrypted-folder / data / unlocked / <vault-name>
-```
-
-as the folder where you read and add normal files after unlocking a vault.
-
-Do not manually edit:
+The encrypted storage is still in:
 
 ```text
 Apps / vitalyliber-encrypted-folder / data / vaults / <vault-name>
 ```
 
-That folder contains encrypted `gocryptfs` data.
+Do not manually edit that folder. It contains encrypted `gocryptfs` data.
+
+For local Docker development, the default unlocked folder remains:
+
+```text
+data / unlocked / <vault-name>
+```
 
 ## Built-In File And Image Browser
 
@@ -169,7 +183,7 @@ When a vault is unlocked, the main UI shows a `Browse` button for that vault.
 
 The browser page lets you:
 
-- Open any folder inside `data/unlocked/<vault-name>`.
+- Open any folder inside the unlocked mount.
 - Navigate with breadcrumbs.
 - Open ordinary files in the browser.
 - View image folders as a PhotoSwipe gallery with swipe and keyboard
@@ -282,7 +296,7 @@ The integration tests cover:
 - Binary files preserving their hash.
 - Host-added files overwriting existing vault files.
 - Container stop locking an unlocked vault.
-- Startup cleanup removing plaintext files from `data/unlocked`.
+- Startup cleanup removing plaintext files from the unlocked workspace.
 
 ## Current Caveats
 
@@ -291,4 +305,5 @@ The integration tests cover:
 - Very large files may need more than the current Docker stop grace period.
 - A hard power loss cannot run graceful lock logic.
 - `data/vaults` is what should be backed up.
-- `data/unlocked` should be treated as temporary plaintext workspace.
+- `Home / Encrypted Folder / Unlocked` should be treated as temporary plaintext
+  workspace on Umbrel OS.

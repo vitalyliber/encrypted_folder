@@ -6,10 +6,13 @@ services:
     container_name: vitalyliber-encrypted-folder_app_proxy_1
 
   server:
-    image: ghcr.io/vitalyliber/encrypted-folder:0.1.1
+    image: ghcr.io/vitalyliber/encrypted-folder:0.1.2
     restart: always
     stop_grace_period: 2m
     container_name: vitalyliber-encrypted-folder_server_1
+    environment:
+      MOUNTS_DIR: /umbrel-home/Encrypted Folder/Unlocked
+      FILE_BROWSER_MOUNTS_PATH: /Home/Encrypted Folder/Unlocked
     devices:
       - /dev/fuse:/dev/fuse
     cap_add:
@@ -18,3 +21,4 @@ services:
       - apparmor:unconfined
     volumes:
       - ${APP_DATA_DIR}/data:/data:rshared
+      - ${UMBREL_ROOT}/home:/umbrel-home:rshared

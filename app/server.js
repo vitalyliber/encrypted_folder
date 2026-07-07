@@ -13,6 +13,7 @@ const DATA_DIR = process.env.DATA_DIR || '/data';
 const VAULTS_DIR = process.env.VAULTS_DIR || path.join(DATA_DIR, 'vaults');
 const MOUNTS_DIR = process.env.MOUNTS_DIR || path.join(DATA_DIR, 'unlocked');
 const IMPORTS_DIR = process.env.IMPORTS_DIR || path.join(DATA_DIR, 'pending-imports');
+const FILE_BROWSER_MOUNTS_PATH = process.env.FILE_BROWSER_MOUNTS_PATH || '';
 const PORT = Number(process.env.PORT || 3000);
 
 mkdirSync(VAULTS_DIR, { recursive: true });
@@ -50,6 +51,21 @@ function resolveInside(root, relativePath = '') {
     throw new Error('Invalid path.');
   }
   return target;
+}
+
+function posixJoin(...parts) {
+  return path.posix.join(...parts.map(part => String(part).replaceAll('\\', '/')));
+}
+
+function fileBrowserPathForVault(name) {
+  if (!FILE_BROWSER_MOUNTS_PATH) return null;
+  return posixJoin(FILE_BROWSER_MOUNTS_PATH, name);
+}
+
+function fileBrowserUrlForPath(fileBrowserPath) {
+  if (!fileBrowserPath) return null;
+  const encoded = fileBrowserPath.split('/').filter(Boolean).map(encodeURIComponent).join('/');
+  return `/files/${encoded}`;
 }
 
 function isImageFile(name) {
@@ -292,9 +308,17 @@ app.get('/api/vaults', async () => {
   const vaults = [];
   for (const name of names) {
     const mountPath = path.join(MOUNTS_DIR, name);
-    vaults.push({ name, encryptedPath: path.join(VAULTS_DIR, name), unlockedPath: mountPath, unlocked: existsSync(mountPath) && await isMountPoint(mountPath) });
+    const fileBrowserPath = fileBrowserPathForVault(name);
+    vaults.push({
+      name,
+      encryptedPath: path.join(VAULTS_DIR, name),
+      unlockedPath: mountPath,
+      fileBrowserPath,
+      fileBrowserUrl: fileBrowserUrlForPath(fileBrowserPath),
+      unlocked: existsSync(mountPath) && await isMountPoint(mountPath),
+    });
   }
-  return { vaults, vaultsDir: VAULTS_DIR, mountsDir: MOUNTS_DIR };
+  return { vaults, vaultsDir: VAULTS_DIR, mountsDir: MOUNTS_DIR, fileBrowserMountsPath: FILE_BROWSER_MOUNTS_PATH || null };
 });
 
 app.get('/api/vaults/:name/files', async (req, reply) => {

@@ -2,7 +2,7 @@ manifestVersion: 1
 id: vitalyliber-encrypted-folder
 category: files
 name: Encrypted Folder
-version: "0.1.1"
+version: "0.1.2"
 tagline: Browse and manage encrypted folders
 description: >-
   Encrypted Folder lets you create gocryptfs encrypted vaults, unlock them into
@@ -22,4 +22,4 @@ torOnly: false
 permissions: []
 icon: "https://raw.githubusercontent.com/vitalyliber/encrypted_folder/main/vitalyliber-encrypted-folder/icon.svg"
 releaseNotes: >-
-  Adds browser favicon assets for the web UI.
+  Moves unlocked folders into Home and adds Umbrel Files links.

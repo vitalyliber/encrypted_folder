@@ -158,6 +158,11 @@ function fileHash(vault, folderPath = '') {
   return `#files?${params.toString()}`;
 }
 
+function umbrelFilesHref(fileBrowserUrl) {
+  if (!fileBrowserUrl) return '#';
+  return `${location.protocol}//${location.hostname}${fileBrowserUrl}`;
+}
+
 function openFolderEncoded(vault, folderPath = '') {
   openFolder(decodeURIComponent(vault), decodeURIComponent(folderPath));
 }
@@ -205,6 +210,7 @@ async function load() {
         <h2>${escapeHtml(v.name)} ${v.unlocked ? '<span class="ok">unlocked</span>' : '<span class="bad">locked</span>'}</h2>
         <p class="muted">Encrypted: <code>${escapeHtml(v.encryptedPath)}</code></p>
         <p class="muted">Unlocked: <code>${escapeHtml(v.unlockedPath)}</code></p>
+        ${v.fileBrowserPath ? `<p class="muted">Umbrel Files: <code>${escapeHtml(v.fileBrowserPath)}</code></p>` : ''}
         ${v.unlocked ? '' : `
           <span class="password-field">
             <input id="pass-${escapeHtml(v.name)}" type="password" placeholder="password" onkeydown="unlockOnEnter(event, '${escapeHtml(v.name)}')" />
@@ -220,6 +226,7 @@ async function load() {
         ${v.unlocked ? `<button class="danger" onclick="lock('${escapeHtml(v.name)}')">Lock</button>` : ''}
         <button class="danger" onclick="deleteVault('${escapeHtml(v.name)}')">Delete</button>
         ${v.unlocked ? `<a class="button secondary" href="${fileHash(v.name)}">Browse</a>` : ''}
+        ${v.unlocked && v.fileBrowserUrl ? `<a class="button secondary" href="${escapeHtml(umbrelFilesHref(v.fileBrowserUrl))}" target="_blank" rel="noopener">Open in Umbrel Files</a>` : ''}
       </div>`).join('') || '<div class="card muted">No vaults yet.</div>';
   } catch (e) {
     msg(e.message, 'bad');
