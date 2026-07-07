@@ -85,13 +85,16 @@ function removeMountDir(mountPath) {
   }
 }
 
-function movePlaintextAside(mountPath, name) {
-  if (!existsSync(mountPath)) return null;
+async function movePlaintextAside(mountPath, name) {
   try {
     rmdirSync(mountPath);
     return null;
   } catch (e) {
     if (e.code === 'ENOENT') return null;
+    if (e.code === 'ENOTCONN') {
+      await unmount(mountPath);
+      return movePlaintextAside(mountPath, name);
+    }
     if (e.code !== 'ENOTEMPTY' && e.code !== 'EEXIST') throw e;
   }
 
@@ -105,6 +108,15 @@ function importPlaintext(importPath, mountPath) {
   cpSync(importPath, mountPath, { recursive: true, force: false, errorOnExist: true });
   rmSync(importPath, { recursive: true, force: true });
   return true;
+}
+
+function pendingImportPath(name) {
+  const prefix = `${name}-`;
+  const matches = readdirSync(IMPORTS_DIR)
+    .filter(entry => entry.startsWith(prefix))
+    .sort();
+  if (matches.length === 0) return null;
+  return path.join(IMPORTS_DIR, matches[0]);
 }
 
 async function ensureMountDir(mountPath) {
@@ -124,7 +136,7 @@ async function ensureMountDir(mountPath) {
 async function prepareMountDir(mountPath, name) {
   try {
     if (existsSync(mountPath) && !await isMountPoint(mountPath)) {
-      const importPath = movePlaintextAside(mountPath, name);
+      const importPath = await movePlaintextAside(mountPath, name);
       mkdirSync(mountPath, { recursive: true });
       return importPath;
     }
@@ -133,7 +145,7 @@ async function prepareMountDir(mountPath, name) {
   } catch (e) {
     if (e.code !== 'ENOTCONN') throw e;
     await unmount(mountPath);
-    const importPath = movePlaintextAside(mountPath, name);
+    const importPath = await movePlaintextAside(mountPath, name);
     mkdirSync(mountPath, { recursive: true });
     return importPath;
   }
@@ -180,7 +192,7 @@ app.post('/api/vaults/:name/unlock', async (req, reply) => {
     const encryptedPath = path.join(VAULTS_DIR, name);
     const mountPath = path.join(MOUNTS_DIR, name);
     if (!existsSync(encryptedPath)) throw new Error('Vault not found.');
-    const importPath = await prepareMountDir(mountPath, name);
+    const importPath = await prepareMountDir(mountPath, name) || pendingImportPath(name);
     if (await isMountPoint(mountPath)) return { ok: true, alreadyUnlocked: true };
     try {
       await run('gocryptfs', ['-allow_other', encryptedPath, mountPath], { input: `${password}\n` });
@@ -201,6 +213,10 @@ app.post('/api/vaults/:name/lock', async (req, reply) => {
   try {
     const name = safeName(req.params.name);
     const mountPath = path.join(MOUNTS_DIR, name);
+    if (!await isMountPoint(mountPath)) {
+      const importPath = await movePlaintextAside(mountPath, name);
+      return { ok: true, pendingImport: Boolean(importPath) };
+    }
     await unmount(mountPath);
     removeMountDir(mountPath);
     return { ok: true };
