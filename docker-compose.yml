@@ -2,7 +2,7 @@ services:
   encrypted-folder:
     build: .
     container_name: encrypted-folder
-    restart: unless-stopped
+    restart: always
     ports:
       - "3009:3000"
     devices:
