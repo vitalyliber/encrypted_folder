@@ -15,6 +15,12 @@ async function api(pathname, options = {}) {
   return body;
 }
 
+async function raw(pathname) {
+  const res = await fetch(`${BASE_URL}${pathname}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return Buffer.from(await res.arrayBuffer());
+}
+
 async function waitForApi() {
   const deadline = Date.now() + 10_000;
   while (Date.now() < deadline) {
@@ -182,6 +188,30 @@ async function testHostAddedFileOverwritesExistingVaultFile() {
   }
 }
 
+async function testUnlockedBrowserListsNestedImages() {
+  const name = 'it-browser';
+  await createVault(name);
+  try {
+    await unlock(name);
+    dockerExec(`mkdir -p /data/unlocked/${name}/photos/nested`);
+    dockerExec(`printf browser-image > /data/unlocked/${name}/photos/nested/picture.jpg`);
+
+    const root = await api(`/api/vaults/${name}/files`);
+    assert.equal(root.entries.some(entry => entry.name === 'photos' && entry.type === 'directory'), true);
+
+    const nested = await api(`/api/vaults/${name}/files?path=${encodeURIComponent('photos/nested')}`);
+    const image = nested.entries.find(entry => entry.name === 'picture.jpg');
+    assert.equal(image?.type, 'file');
+    assert.equal(image?.isImage, true);
+    assert.equal(typeof image?.url, 'string');
+
+    const bytes = await raw(image.url);
+    assert.equal(bytes.toString(), 'browser-image');
+  } finally {
+    await deleteVault(name);
+  }
+}
+
 async function testShutdownLocksVaultAndStartupCleansUnlocked() {
   const name = 'it-shutdown';
   const strayName = 'it-startup-stray';
@@ -222,5 +252,6 @@ await testMountedFilesSurviveLock();
 await testPlaintextAddedWhileNotMountedIsImported();
 await testBinaryFilesSurviveLock();
 await testHostAddedFileOverwritesExistingVaultFile();
+await testUnlockedBrowserListsNestedImages();
 await testShutdownLocksVaultAndStartupCleansUnlocked();
 console.log('integration tests passed');

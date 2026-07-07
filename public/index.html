@@ -4,43 +4,87 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Encrypted Folder</title>
+  <link rel="stylesheet" href="https://unpkg.com/photoswipe@5/dist/photoswipe.css" />
   <style>
-    body { font-family: system-ui, sans-serif; max-width: 840px; margin: 40px auto; padding: 0 18px; background:#10131a; color:#eef2ff; }
-    .card { background:#171b25; border:1px solid #2a3142; border-radius:16px; padding:18px; margin:16px 0; }
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; max-width: 1100px; margin: 32px auto; padding: 0 18px; background:#10131a; color:#eef2ff; }
+    a { color: inherit; }
+    .topbar { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:18px; }
+    .card { background:#171b25; border:1px solid #2a3142; border-radius:8px; padding:18px; margin:16px 0; }
     input { padding:10px; border-radius:10px; border:1px solid #394153; background:#0e1118; color:#fff; margin:4px; }
-    button { padding:10px 14px; border-radius:10px; border:0; cursor:pointer; margin:4px; }
+    button, .button { display:inline-flex; align-items:center; justify-content:center; gap:6px; padding:10px 14px; border-radius:10px; border:0; cursor:pointer; margin:4px; text-decoration:none; font:inherit; }
     .password-field { display:inline-flex; align-items:center; width:176px; border:1px solid #394153; border-radius:10px; background:#0e1118; margin:4px; vertical-align:middle; }
     .password-field input { min-width:0; flex:1; width:100%; border:0; margin:0; padding-right:4px; }
     .icon-button { flex:0 0 auto; background:transparent; color:#aab2c5; padding:8px; line-height:0; margin:0; }
     .icon-button svg { width:20px; height:20px; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
-    .primary { background:#7c3aed; color:white; } .danger { background:#ef4444; color:white; }
+    .primary { background:#7c3aed; color:white; }
+    .secondary { background:#273044; color:#eef2ff; }
+    .danger { background:#ef4444; color:white; }
     code { background:#0e1118; padding:2px 6px; border-radius:6px; }
     .muted { color:#aab2c5; } .ok { color:#86efac; } .bad { color:#fca5a5; }
+    .hidden { display:none; }
+    .pathbar { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:10px 0 18px; }
+    .pathbar button { margin:0; padding:7px 10px; background:#20283a; color:#eef2ff; }
+    .browser-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:12px; }
+    .entry { min-height:138px; border:1px solid #2a3142; border-radius:8px; background:#151a24; color:#eef2ff; overflow:hidden; text-align:left; }
+    .entry button, .entry a { width:100%; height:100%; min-height:138px; padding:0; margin:0; background:transparent; color:inherit; border:0; text-decoration:none; cursor:pointer; display:flex; flex-direction:column; }
+    .thumb { height:102px; background:#0e1118; display:flex; align-items:center; justify-content:center; color:#aab2c5; font-size:34px; overflow:hidden; }
+    .thumb img { width:100%; height:100%; object-fit:cover; display:block; }
+    .entry-name { padding:10px; overflow-wrap:anywhere; font-size:14px; }
+    .entry-meta { padding:0 10px 10px; color:#aab2c5; font-size:12px; }
+    .empty { padding:28px; text-align:center; border:1px dashed #394153; border-radius:8px; color:#aab2c5; }
+    @media (max-width: 700px) {
+      body { margin:18px auto; }
+      .topbar { align-items:flex-start; flex-direction:column; }
+      .browser-grid { grid-template-columns:repeat(auto-fill, minmax(118px, 1fr)); gap:10px; }
+      .thumb { height:88px; }
+    }
   </style>
 </head>
 <body>
-  <h1>Encrypted Folder</h1>
-  <p class="muted">Minimal gocryptfs vault manager. Create a vault, unlock it, then open the mounted folder from Umbrel Files or another file manager.</p>
+  <section id="homeView">
+    <div class="topbar">
+      <div>
+        <h1>Encrypted Folder</h1>
+        <p class="muted">Minimal gocryptfs vault manager. Unlock a vault, then browse files and images from this UI or Umbrel File Browser.</p>
+      </div>
+    </div>
 
-  <div class="card">
-    <h2>Create vault</h2>
-    <input id="newName" placeholder="vault-name" />
-    <span class="password-field">
-      <input id="newPass" type="password" placeholder="password, min 8 chars" />
-      <button id="toggleNewPass" class="icon-button" type="button" aria-label="Show password" onclick="toggleNewPassword()">
-        <svg id="newPassEye" viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"></path>
-          <circle cx="12" cy="12" r="3"></circle>
-        </svg>
-      </button>
-    </span>
-    <button class="primary" onclick="createVault()">Create</button>
-  </div>
+    <div class="card">
+      <h2>Create vault</h2>
+      <input id="newName" placeholder="vault-name" />
+      <span class="password-field">
+        <input id="newPass" type="password" placeholder="password, min 8 chars" />
+        <button id="toggleNewPass" class="icon-button" type="button" aria-label="Show password" onclick="toggleNewPassword()">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"></path>
+            <circle cx="12" cy="12" r="3"></circle>
+          </svg>
+        </button>
+      </span>
+      <button class="primary" onclick="createVault()">Create</button>
+    </div>
 
-  <div id="status" class="muted"></div>
-  <div id="vaults"></div>
+    <div id="status" class="muted"></div>
+    <div id="vaults"></div>
+  </section>
+
+  <section id="browserView" class="hidden">
+    <div class="topbar">
+      <div>
+        <h1 id="browserTitle">Files</h1>
+        <div id="browserStatus" class="muted"></div>
+      </div>
+      <button class="secondary" onclick="goHome()">Back to vaults</button>
+    </div>
+    <div id="breadcrumbs" class="pathbar"></div>
+    <div id="fileGrid" class="browser-grid"></div>
+  </section>
 
 <script>
+const state = { vault: null, path: '' };
+const imageExtensions = /\.(avif|bmp|gif|jpe?g|png|svg|webp)$/i;
+
 async function api(url, options = {}) {
   const fetchOptions = { ...options };
   if (fetchOptions.body) {
@@ -51,7 +95,37 @@ async function api(url, options = {}) {
   if (!res.ok) throw new Error(data.error || 'Request failed');
   return data;
 }
-function msg(text, cls='muted') { document.getElementById('status').innerHTML = `<p class="${cls}">${text}</p>`; }
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, char => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  }[char]));
+}
+
+function formatSize(bytes) {
+  if (!bytes) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let size = bytes;
+  let index = 0;
+  while (size >= 1024 && index < units.length - 1) {
+    size /= 1024;
+    index += 1;
+  }
+  return `${size.toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
+}
+
+function msg(text, cls='muted') {
+  document.getElementById('status').innerHTML = `<p class="${cls}">${escapeHtml(text)}</p>`;
+}
+
+function browserMsg(text, cls='muted') {
+  document.getElementById('browserStatus').innerHTML = `<p class="${cls}">${escapeHtml(text)}</p>`;
+}
+
 function togglePassword(inputId, buttonId) {
   const input = document.getElementById(inputId);
   const button = document.getElementById(buttonId);
@@ -59,48 +133,230 @@ function togglePassword(inputId, buttonId) {
   input.type = visible ? 'password' : 'text';
   button.setAttribute('aria-label', visible ? 'Show password' : 'Hide password');
 }
-function toggleNewPassword() { togglePassword('newPass', 'toggleNewPass'); }
-async function load() {
-  const data = await api('/api/vaults');
-  document.getElementById('vaults').innerHTML = data.vaults.map(v => `
-    <div class="card">
-      <h2>${v.name} ${v.unlocked ? '<span class="ok">unlocked</span>' : '<span class="bad">locked</span>'}</h2>
-      <p class="muted">Encrypted: <code>${v.encryptedPath}</code></p>
-      <p class="muted">Unlocked: <code>${v.unlockedPath}</code></p>
-      <span class="password-field">
-        <input id="pass-${v.name}" type="password" placeholder="password" />
-        <button id="toggle-pass-${v.name}" class="icon-button" type="button" aria-label="Show password" onclick="togglePassword('pass-${v.name}', 'toggle-pass-${v.name}')">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"></path>
-            <circle cx="12" cy="12" r="3"></circle>
-          </svg>
-        </button>
-      </span>
-      <button class="primary" onclick="unlock('${v.name}')">Unlock</button>
-      <button class="danger" onclick="lock('${v.name}')">Lock</button>
-      <button class="danger" onclick="deleteVault('${v.name}')">Delete</button>
-    </div>`).join('') || '<div class="card muted">No vaults yet.</div>';
+
+function toggleNewPassword() {
+  togglePassword('newPass', 'toggleNewPass');
 }
+
+function fileHash(vault, folderPath = '') {
+  const params = new URLSearchParams({ vault, path: folderPath });
+  return `#files?${params.toString()}`;
+}
+
+function openFolderEncoded(vault, folderPath = '') {
+  openFolder(decodeURIComponent(vault), decodeURIComponent(folderPath));
+}
+
+function showHome() {
+  document.getElementById('homeView').classList.remove('hidden');
+  document.getElementById('browserView').classList.add('hidden');
+}
+
+function showBrowser() {
+  document.getElementById('homeView').classList.add('hidden');
+  document.getElementById('browserView').classList.remove('hidden');
+}
+
+function goHome() {
+  history.pushState(null, '', location.pathname);
+  showHome();
+  load();
+}
+
+function route() {
+  const hash = location.hash.slice(1);
+  if (!hash.startsWith('files')) {
+    showHome();
+    load();
+    return;
+  }
+  const query = hash.includes('?') ? hash.slice(hash.indexOf('?') + 1) : '';
+  const params = new URLSearchParams(query);
+  const vault = params.get('vault');
+  const folderPath = params.get('path') || '';
+  if (!vault) {
+    goHome();
+    return;
+  }
+  openFolder(vault, folderPath, false);
+}
+
+async function load() {
+  try {
+    const data = await api('/api/vaults');
+    document.getElementById('vaults').innerHTML = data.vaults.map(v => `
+      <div class="card">
+        <h2>${escapeHtml(v.name)} ${v.unlocked ? '<span class="ok">unlocked</span>' : '<span class="bad">locked</span>'}</h2>
+        <p class="muted">Encrypted: <code>${escapeHtml(v.encryptedPath)}</code></p>
+        <p class="muted">Unlocked: <code>${escapeHtml(v.unlockedPath)}</code></p>
+        <span class="password-field">
+          <input id="pass-${escapeHtml(v.name)}" type="password" placeholder="password" />
+          <button id="toggle-pass-${escapeHtml(v.name)}" class="icon-button" type="button" aria-label="Show password" onclick="togglePassword('pass-${escapeHtml(v.name)}', 'toggle-pass-${escapeHtml(v.name)}')">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+          </button>
+        </span>
+        <button class="primary" onclick="unlock('${escapeHtml(v.name)}')">Unlock</button>
+        <button class="danger" onclick="lock('${escapeHtml(v.name)}')">Lock</button>
+        <button class="danger" onclick="deleteVault('${escapeHtml(v.name)}')">Delete</button>
+        ${v.unlocked ? `<a class="button secondary" href="${fileHash(v.name)}">Browse</a>` : ''}
+      </div>`).join('') || '<div class="card muted">No vaults yet.</div>';
+  } catch (e) {
+    msg(e.message, 'bad');
+  }
+}
+
 async function createVault() {
   try {
     await api('/api/vaults', { method:'POST', body: JSON.stringify({ name:newName.value, password:newPass.value }) });
-    newName.value = ''; newPass.value = ''; msg('Vault created.', 'ok'); await load();
-  } catch(e) { msg(e.message, 'bad'); }
+    newName.value = '';
+    newPass.value = '';
+    msg('Vault created.', 'ok');
+    await load();
+  } catch(e) {
+    msg(e.message, 'bad');
+  }
 }
+
 async function unlock(name) {
-  try { await api(`/api/vaults/${name}/unlock`, { method:'POST', body: JSON.stringify({ password:document.getElementById(`pass-${name}`).value }) }); msg('Unlocked.', 'ok'); await load(); }
-  catch(e) { msg(e.message, 'bad'); }
+  try {
+    await api(`/api/vaults/${encodeURIComponent(name)}/unlock`, {
+      method:'POST',
+      body: JSON.stringify({ password:document.getElementById(`pass-${name}`).value }),
+    });
+    msg('Unlocked.', 'ok');
+    await load();
+  } catch(e) {
+    msg(e.message, 'bad');
+  }
 }
+
 async function lock(name) {
-  try { await api(`/api/vaults/${name}/lock`, { method:'POST' }); msg('Locked.', 'ok'); await load(); }
-  catch(e) { msg(e.message, 'bad'); }
+  try {
+    await api(`/api/vaults/${encodeURIComponent(name)}/lock`, { method:'POST' });
+    msg('Locked.', 'ok');
+    if (state.vault === name) goHome();
+    await load();
+  } catch(e) {
+    msg(e.message, 'bad');
+  }
 }
+
 async function deleteVault(name) {
   if (!confirm(`Delete vault "${name}" permanently?`)) return;
-  try { await api(`/api/vaults/${name}`, { method:'DELETE' }); msg('Vault deleted.', 'ok'); await load(); }
-  catch(e) { msg(e.message, 'bad'); }
+  try {
+    await api(`/api/vaults/${encodeURIComponent(name)}`, { method:'DELETE' });
+    msg('Vault deleted.', 'ok');
+    if (state.vault === name) goHome();
+    await load();
+  } catch(e) {
+    msg(e.message, 'bad');
+  }
 }
-load();
+
+function renderBreadcrumbs(vault, folderPath) {
+  const parts = folderPath ? folderPath.split('/') : [];
+  let current = '';
+  const encodedVault = encodeURIComponent(vault);
+  const buttons = [`<button onclick="openFolderEncoded('${encodedVault}', '')">${escapeHtml(vault)}</button>`];
+  for (const part of parts) {
+    current = current ? `${current}/${part}` : part;
+    buttons.push(`<span class="muted">/</span><button onclick="openFolderEncoded('${encodedVault}', '${encodeURIComponent(current)}')">${escapeHtml(part)}</button>`);
+  }
+  document.getElementById('breadcrumbs').innerHTML = buttons.join('');
+}
+
+async function openFolder(vault, folderPath = '', updateHash = true) {
+  state.vault = vault;
+  state.path = folderPath;
+  showBrowser();
+  document.getElementById('browserTitle').textContent = `Files: ${vault}`;
+  browserMsg(folderPath || '/');
+  renderBreadcrumbs(vault, folderPath);
+  document.getElementById('fileGrid').innerHTML = '<div class="empty">Loading...</div>';
+  if (updateHash) history.pushState(null, '', fileHash(vault, folderPath));
+
+  try {
+    const url = `/api/vaults/${encodeURIComponent(vault)}/files?path=${encodeURIComponent(folderPath)}`;
+    const data = await api(url);
+    renderEntries(data.entries);
+  } catch (e) {
+    browserMsg(e.message, 'bad');
+    document.getElementById('fileGrid').innerHTML = `<div class="empty">${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function renderEntries(entries) {
+  if (entries.length === 0) {
+    document.getElementById('fileGrid').innerHTML = '<div class="empty">This folder is empty.</div>';
+    return;
+  }
+
+  const galleryIndex = entries.filter(entry => entry.isImage).map(entry => entry.path);
+  document.getElementById('fileGrid').innerHTML = entries.map(entry => {
+    if (entry.type === 'directory') {
+      return `
+        <div class="entry">
+          <button onclick="openFolderEncoded('${encodeURIComponent(state.vault)}', '${encodeURIComponent(entry.path)}')">
+            <div class="thumb">Folder</div>
+            <div class="entry-name">${escapeHtml(entry.name)}</div>
+            <div class="entry-meta">Folder</div>
+          </button>
+        </div>`;
+    }
+
+    if (entry.isImage) {
+      const index = galleryIndex.indexOf(entry.path);
+      return `
+        <div class="entry">
+          <a href="${entry.url}" class="gallery-image" data-index="${index}" data-pswp-width="1600" data-pswp-height="1200">
+            <div class="thumb"><img src="${entry.url}" loading="lazy" alt="${escapeHtml(entry.name)}" onload="setPhotoSize(this)" /></div>
+            <div class="entry-name">${escapeHtml(entry.name)}</div>
+            <div class="entry-meta">${formatSize(entry.size)}</div>
+          </a>
+        </div>`;
+    }
+
+    return `
+      <div class="entry">
+        <a href="${entry.url}" target="_blank" rel="noopener">
+          <div class="thumb">File</div>
+          <div class="entry-name">${escapeHtml(entry.name)}</div>
+          <div class="entry-meta">${formatSize(entry.size)}</div>
+        </a>
+      </div>`;
+  }).join('');
+
+  if (window.attachGallery) window.attachGallery();
+}
+
+function setPhotoSize(img) {
+  const anchor = img.closest('a');
+  if (!anchor || !img.naturalWidth || !img.naturalHeight) return;
+  anchor.dataset.pswpWidth = String(img.naturalWidth);
+  anchor.dataset.pswpHeight = String(img.naturalHeight);
+}
+
+window.addEventListener('hashchange', route);
+route();
+</script>
+<script type="module">
+import PhotoSwipeLightbox from 'https://unpkg.com/photoswipe@5/dist/photoswipe-lightbox.esm.js';
+import PhotoSwipe from 'https://unpkg.com/photoswipe@5/dist/photoswipe.esm.js';
+
+let lightbox;
+window.attachGallery = function attachGallery() {
+  if (lightbox) lightbox.destroy();
+  lightbox = new PhotoSwipeLightbox({
+    gallery: '#fileGrid',
+    children: 'a.gallery-image',
+    pswpModule: PhotoSwipe,
+  });
+  lightbox.init();
+};
+if (document.querySelector('a.gallery-image')) window.attachGallery();
 </script>
 </body>
 </html>

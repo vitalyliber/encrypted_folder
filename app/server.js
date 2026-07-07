@@ -1,6 +1,7 @@
 import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
 import { spawn } from 'node:child_process';
+import { createReadStream } from 'node:fs';
 import { chmodSync, cpSync, existsSync, mkdirSync, readdirSync, renameSync, rmSync, rmdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -30,6 +31,45 @@ let shuttingDown = false;
 function safeName(name) {
   if (!/^[a-zA-Z0-9._-]{1,64}$/.test(name || '')) throw new Error('Use only letters, numbers, dot, underscore and dash. Max 64 chars.');
   return name;
+}
+
+function safeRelativePath(value = '') {
+  if (typeof value !== 'string') throw new Error('Invalid path.');
+  const normalized = path.posix.normalize(value.replaceAll('\\', '/'));
+  if (normalized === '.' || normalized === '/') return '';
+  if (normalized.startsWith('../') || normalized === '..' || path.posix.isAbsolute(normalized)) {
+    throw new Error('Invalid path.');
+  }
+  return normalized;
+}
+
+function resolveInside(root, relativePath = '') {
+  const target = path.resolve(root, safeRelativePath(relativePath));
+  const resolvedRoot = path.resolve(root);
+  if (target !== resolvedRoot && !target.startsWith(`${resolvedRoot}${path.sep}`)) {
+    throw new Error('Invalid path.');
+  }
+  return target;
+}
+
+function isImageFile(name) {
+  return /\.(avif|bmp|gif|jpe?g|png|svg|webp)$/i.test(name);
+}
+
+function contentTypeFor(name) {
+  const ext = path.extname(name).toLowerCase();
+  return {
+    '.avif': 'image/avif',
+    '.bmp': 'image/bmp',
+    '.gif': 'image/gif',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.png': 'image/png',
+    '.svg': 'image/svg+xml',
+    '.webp': 'image/webp',
+    '.txt': 'text/plain; charset=utf-8',
+    '.pdf': 'application/pdf',
+  }[ext] || 'application/octet-stream';
 }
 
 function run(command, args, opts = {}) {
@@ -243,6 +283,66 @@ app.get('/api/vaults', async () => {
     vaults.push({ name, encryptedPath: path.join(VAULTS_DIR, name), unlockedPath: mountPath, unlocked: existsSync(mountPath) && await isMountPoint(mountPath) });
   }
   return { vaults, vaultsDir: VAULTS_DIR, mountsDir: MOUNTS_DIR };
+});
+
+app.get('/api/vaults/:name/files', async (req, reply) => {
+  try {
+    const name = safeName(req.params.name);
+    const requestedPath = safeRelativePath(req.query?.path || '');
+    const mountPath = path.join(MOUNTS_DIR, name);
+    if (!await isMountPoint(mountPath)) throw new Error('Vault is locked.');
+
+    const dirPath = resolveInside(mountPath, requestedPath);
+    const dirStat = statSync(dirPath);
+    if (!dirStat.isDirectory()) throw new Error('Path is not a directory.');
+
+    const entries = readdirSync(dirPath, { withFileTypes: true })
+      .filter(entry => !entry.name.startsWith('.'))
+      .map(entry => {
+        const relativePath = path.posix.join(requestedPath, entry.name);
+        const fullPath = path.join(dirPath, entry.name);
+        const stats = statSync(fullPath);
+        const type = entry.isDirectory() ? 'directory' : 'file';
+        return {
+          name: entry.name,
+          path: relativePath,
+          type,
+          size: stats.size,
+          modifiedAt: stats.mtime.toISOString(),
+          isImage: type === 'file' && isImageFile(entry.name),
+          url: type === 'file' ? `/api/vaults/${encodeURIComponent(name)}/file?path=${encodeURIComponent(relativePath)}` : null,
+        };
+      })
+      .sort((a, b) => {
+        if (a.type !== b.type) return a.type === 'directory' ? -1 : 1;
+        return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+      });
+
+    return { ok: true, name, path: requestedPath, entries };
+  } catch (e) {
+    reply.code(400);
+    return { ok: false, error: e.message };
+  }
+});
+
+app.get('/api/vaults/:name/file', async (req, reply) => {
+  try {
+    const name = safeName(req.params.name);
+    const requestedPath = safeRelativePath(req.query?.path || '');
+    if (!requestedPath) throw new Error('File path is required.');
+    const mountPath = path.join(MOUNTS_DIR, name);
+    if (!await isMountPoint(mountPath)) throw new Error('Vault is locked.');
+
+    const filePath = resolveInside(mountPath, requestedPath);
+    const stats = statSync(filePath);
+    if (!stats.isFile()) throw new Error('Path is not a file.');
+    reply.type(contentTypeFor(filePath));
+    reply.header('content-length', stats.size);
+    return reply.send(createReadStream(filePath));
+  } catch (e) {
+    reply.code(400);
+    return { ok: false, error: e.message };
+  }
 });
 
 app.post('/api/vaults', async (req, reply) => {

@@ -16,6 +16,8 @@ only in encrypted form.
   session.
 - Preserves files added through Umbrel File Browser while a vault is unlocked.
 - Encrypts host-added files on `Lock`.
+- Provides a built-in read-only browser for unlocked folders.
+- Opens image folders in a PhotoSwipe gallery with swipe navigation.
 - Tries to lock open vaults automatically when the container is stopped.
 - Deletes leftover `data/unlocked/*` folders on startup for safety.
 
@@ -160,6 +162,22 @@ Apps / umbrel-encrypted-folder / data / vaults / <vault-name>
 ```
 
 That folder contains encrypted `gocryptfs` data.
+
+## Built-In File And Image Browser
+
+When a vault is unlocked, the main UI shows a `Browse` button for that vault.
+
+The browser page lets you:
+
+- Open any folder inside `data/unlocked/<vault-name>`.
+- Navigate with breadcrumbs.
+- Open ordinary files in the browser.
+- View image folders as a PhotoSwipe gallery with swipe and keyboard
+  navigation.
+
+The built-in browser is read-only. Add, move, or delete files through Umbrel File
+Browser or another file manager. This app only lists and serves files from the
+currently mounted `unlocked` folder.
 
 ## Running Locally
 
