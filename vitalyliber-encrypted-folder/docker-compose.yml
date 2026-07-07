@@ -6,7 +6,7 @@ services:
     container_name: vitalyliber-encrypted-folder_app_proxy_1
 
   server:
-    image: ghcr.io/vitalyliber/encrypted-folder:0.1.0
+    image: ghcr.io/vitalyliber/encrypted-folder:0.1.1
     restart: always
     stop_grace_period: 2m
     container_name: vitalyliber-encrypted-folder_server_1

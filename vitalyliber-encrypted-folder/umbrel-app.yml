@@ -2,7 +2,7 @@ manifestVersion: 1
 id: vitalyliber-encrypted-folder
 category: files
 name: Encrypted Folder
-version: "0.1.0"
+version: "0.1.1"
 tagline: Browse and manage encrypted folders
 description: >-
   Encrypted Folder lets you create gocryptfs encrypted vaults, unlock them into
@@ -21,4 +21,4 @@ defaultPassword: ""
 torOnly: false
 permissions: []
 releaseNotes: >-
-  Initial community app package.
+  Adds browser favicon assets for the web UI.
