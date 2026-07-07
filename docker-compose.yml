@@ -1,0 +1,15 @@
+services:
+  encrypted-folder:
+    build: .
+    container_name: encrypted-folder
+    restart: unless-stopped
+    ports:
+      - "3009:3000"
+    devices:
+      - /dev/fuse:/dev/fuse
+    cap_add:
+      - SYS_ADMIN
+    security_opt:
+      - apparmor:unconfined
+    volumes:
+      - ./data:/data:rshared

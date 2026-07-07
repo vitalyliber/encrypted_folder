@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Encrypted Folder</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 840px; margin: 40px auto; padding: 0 18px; background:#10131a; color:#eef2ff; }
+    .card { background:#171b25; border:1px solid #2a3142; border-radius:16px; padding:18px; margin:16px 0; }
+    input { padding:10px; border-radius:10px; border:1px solid #394153; background:#0e1118; color:#fff; margin:4px; }
+    button { padding:10px 14px; border-radius:10px; border:0; cursor:pointer; margin:4px; }
+    .primary { background:#7c3aed; color:white; } .danger { background:#ef4444; color:white; }
+    code { background:#0e1118; padding:2px 6px; border-radius:6px; }
+    .muted { color:#aab2c5; } .ok { color:#86efac; } .bad { color:#fca5a5; }
+  </style>
+</head>
+<body>
+  <h1>Encrypted Folder</h1>
+  <p class="muted">Minimal gocryptfs vault manager. Create a vault, unlock it, then open the mounted folder from Umbrel Files or another file manager.</p>
+
+  <div class="card">
+    <h2>Create vault</h2>
+    <input id="newName" placeholder="vault-name" />
+    <input id="newPass" type="password" placeholder="password, min 8 chars" />
+    <button class="primary" onclick="createVault()">Create</button>
+  </div>
+
+  <div id="status" class="muted"></div>
+  <div id="vaults"></div>
+
+<script>
+async function api(url, options = {}) {
+  const fetchOptions = { ...options };
+  if (fetchOptions.body) {
+    fetchOptions.headers = { 'content-type': 'application/json', ...fetchOptions.headers };
+  }
+  const res = await fetch(url, fetchOptions);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Request failed');
+  return data;
+}
+function msg(text, cls='muted') { document.getElementById('status').innerHTML = `<p class="${cls}">${text}</p>`; }
+async function load() {
+  const data = await api('/api/vaults');
+  document.getElementById('vaults').innerHTML = data.vaults.map(v => `
+    <div class="card">
+      <h2>${v.name} ${v.unlocked ? '<span class="ok">unlocked</span>' : '<span class="bad">locked</span>'}</h2>
+      <p class="muted">Encrypted: <code>${v.encryptedPath}</code></p>
+      <p class="muted">Unlocked: <code>${v.unlockedPath}</code></p>
+      <input id="pass-${v.name}" type="password" placeholder="password" />
+      <button class="primary" onclick="unlock('${v.name}')">Unlock</button>
+      <button class="danger" onclick="lock('${v.name}')">Lock</button>
+    </div>`).join('') || '<div class="card muted">No vaults yet.</div>';
+}
+async function createVault() {
+  try {
+    await api('/api/vaults', { method:'POST', body: JSON.stringify({ name:newName.value, password:newPass.value }) });
+    newName.value = ''; newPass.value = ''; msg('Vault created.', 'ok'); await load();
+  } catch(e) { msg(e.message, 'bad'); }
+}
+async function unlock(name) {
+  try { await api(`/api/vaults/${name}/unlock`, { method:'POST', body: JSON.stringify({ password:document.getElementById(`pass-${name}`).value }) }); msg('Unlocked.', 'ok'); await load(); }
+  catch(e) { msg(e.message, 'bad'); }
+}
+async function lock(name) {
+  try { await api(`/api/vaults/${name}/lock`, { method:'POST' }); msg('Locked.', 'ok'); await load(); }
+  catch(e) { msg(e.message, 'bad'); }
+}
+load();
+</script>
+</body>
+</html>
