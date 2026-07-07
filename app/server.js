@@ -1,7 +1,7 @@
 import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync, rmdirSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, rmSync, rmdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -129,6 +129,22 @@ app.post('/api/vaults/:name/lock', async (req, reply) => {
     const mountPath = path.join(MOUNTS_DIR, name);
     if (!existsSync(mountPath)) return { ok: true };
     await unmount(mountPath);
+    return { ok: true };
+  } catch (e) {
+    reply.code(400);
+    return { ok: false, error: e.message };
+  }
+});
+
+app.delete('/api/vaults/:name', async (req, reply) => {
+  try {
+    const name = safeName(req.params.name);
+    const encryptedPath = path.join(VAULTS_DIR, name);
+    const mountPath = path.join(MOUNTS_DIR, name);
+    if (!existsSync(encryptedPath) && !existsSync(mountPath)) return { ok: true };
+    if (existsSync(mountPath)) await unmount(mountPath);
+    rmSync(encryptedPath, { recursive: true, force: true });
+    rmSync(mountPath, { recursive: true, force: true });
     return { ok: true };
   } catch (e) {
     reply.code(400);

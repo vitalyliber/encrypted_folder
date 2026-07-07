@@ -50,6 +50,7 @@ async function load() {
       <input id="pass-${v.name}" type="password" placeholder="password" />
       <button class="primary" onclick="unlock('${v.name}')">Unlock</button>
       <button class="danger" onclick="lock('${v.name}')">Lock</button>
+      <button class="danger" onclick="deleteVault('${v.name}')">Delete</button>
     </div>`).join('') || '<div class="card muted">No vaults yet.</div>';
 }
 async function createVault() {
@@ -64,6 +65,11 @@ async function unlock(name) {
 }
 async function lock(name) {
   try { await api(`/api/vaults/${name}/lock`, { method:'POST' }); msg('Locked.', 'ok'); await load(); }
+  catch(e) { msg(e.message, 'bad'); }
+}
+async function deleteVault(name) {
+  if (!confirm(`Delete vault "${name}" permanently?`)) return;
+  try { await api(`/api/vaults/${name}`, { method:'DELETE' }); msg('Vault deleted.', 'ok'); await load(); }
   catch(e) { msg(e.message, 'bad'); }
 }
 load();
