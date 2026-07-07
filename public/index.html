@@ -26,7 +26,9 @@
     .pathbar { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:10px 0 18px; }
     .pathbar button { margin:0; padding:7px 10px; background:#20283a; color:#eef2ff; }
     .browser-controls { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:0 0 18px; }
-    .browser-controls select { background:#0e1118; color:#eef2ff; border:1px solid #394153; border-radius:10px; padding:9px; }
+    .pswp__slideshow-controls { position:absolute; left:50%; bottom:22px; transform:translateX(-50%); z-index:10000; display:flex; align-items:center; gap:8px; padding:8px; border-radius:12px; background:rgba(16,19,26,.84); color:#eef2ff; backdrop-filter:blur(10px); }
+    .pswp__slideshow-controls select { background:#0e1118; color:#eef2ff; border:1px solid #394153; border-radius:10px; padding:9px; }
+    .pswp__slideshow-controls button { margin:0; background:#7c3aed; color:white; }
     .browser-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:12px; }
     .entry { position:relative; min-height:138px; border:1px solid #2a3142; border-radius:8px; background:#151a24; color:#eef2ff; overflow:hidden; text-align:left; }
     .entry button, .entry a { width:100%; height:100%; min-height:138px; padding:0; margin:0; background:transparent; color:inherit; border:0; text-decoration:none; cursor:pointer; display:flex; flex-direction:column; }
@@ -83,14 +85,6 @@
     <div id="breadcrumbs" class="pathbar"></div>
     <div class="browser-controls">
       <button id="slideshowButton" class="primary" type="button" onclick="startSlideshowFromFirst()">Slideshow</button>
-      <label class="muted" for="slideshowInterval">Interval</label>
-      <select id="slideshowInterval">
-        <option value="2000">2 sec</option>
-        <option value="3000" selected>3 sec</option>
-        <option value="5000">5 sec</option>
-        <option value="8000">8 sec</option>
-        <option value="10000">10 sec</option>
-      </select>
     </div>
     <div id="fileGrid" class="browser-grid"></div>
   </section>
@@ -102,6 +96,7 @@ window.currentImageCount = 0;
 window.galleryLightbox = null;
 window.slideshowTimer = null;
 window.slideshowRunning = false;
+window.slideshowInterval = 3000;
 
 async function api(url, options = {}) {
   const fetchOptions = { ...options };
@@ -376,16 +371,16 @@ function setPhotoSize(img) {
 }
 
 function slideshowIntervalMs() {
-  return Number(document.getElementById('slideshowInterval')?.value || 3000);
+  return Number(document.getElementById('pswpSlideshowInterval')?.value || window.slideshowInterval || 3000);
 }
 
 function updateSlideshowButtons() {
-  document.querySelectorAll('.pswp__button--slideshow').forEach(button => {
+  document.querySelectorAll('[data-slideshow-toggle]').forEach(button => {
     button.textContent = window.slideshowRunning ? 'Pause' : 'Play';
     button.setAttribute('aria-label', window.slideshowRunning ? 'Pause slideshow' : 'Start slideshow');
   });
   const button = document.getElementById('slideshowButton');
-  if (button) button.textContent = window.slideshowRunning ? 'Stop slideshow' : 'Slideshow';
+  if (button) button.textContent = window.slideshowRunning ? 'Stop' : 'Slideshow';
 }
 
 window.stopSlideshow = function stopSlideshow() {
@@ -439,24 +434,38 @@ try {
   window.attachGallery = function attachGallery() {
     if (window.galleryLightbox) window.galleryLightbox.destroy();
     window.stopSlideshow();
-    window.galleryLightbox = new PhotoSwipeLightbox({
+  window.galleryLightbox = new PhotoSwipeLightbox({
       gallery: '#fileGrid',
       children: 'a.gallery-image',
       loop: true,
       pswpModule: PhotoSwipe,
     });
-    window.galleryLightbox.on('uiRegister', () => {
-      window.galleryLightbox.pswp.ui.registerElement({
-        name: 'slideshow',
-        order: 9,
-        isButton: true,
-        tagName: 'button',
-        html: 'Play',
-        onClick: () => {
-          if (window.slideshowRunning) window.stopSlideshow();
-          else playSlideshow();
-        },
+    window.galleryLightbox.on('afterInit', () => {
+      const controls = document.createElement('div');
+      controls.className = 'pswp__slideshow-controls';
+      controls.innerHTML = `
+        <button type="button" data-slideshow-toggle>Play</button>
+        <label for="pswpSlideshowInterval">Interval</label>
+        <select id="pswpSlideshowInterval">
+          <option value="2000">2 sec</option>
+          <option value="3000">3 sec</option>
+          <option value="5000">5 sec</option>
+          <option value="8000">8 sec</option>
+          <option value="10000">10 sec</option>
+        </select>
+      `;
+      const select = controls.querySelector('select');
+      select.value = String(window.slideshowInterval || 3000);
+      select.addEventListener('change', () => {
+        window.slideshowInterval = Number(select.value);
+        if (window.slideshowRunning) playSlideshow();
       });
+      controls.querySelector('[data-slideshow-toggle]').addEventListener('click', () => {
+        if (window.slideshowRunning) window.stopSlideshow();
+        else playSlideshow();
+      });
+      window.galleryLightbox.pswp.element.appendChild(controls);
+      updateSlideshowButtons();
     });
     window.galleryLightbox.on('close', () => window.stopSlideshow());
     window.galleryLightbox.init();
