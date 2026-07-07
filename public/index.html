@@ -189,17 +189,19 @@ async function load() {
         <h2>${escapeHtml(v.name)} ${v.unlocked ? '<span class="ok">unlocked</span>' : '<span class="bad">locked</span>'}</h2>
         <p class="muted">Encrypted: <code>${escapeHtml(v.encryptedPath)}</code></p>
         <p class="muted">Unlocked: <code>${escapeHtml(v.unlockedPath)}</code></p>
-        <span class="password-field">
-          <input id="pass-${escapeHtml(v.name)}" type="password" placeholder="password" />
-          <button id="toggle-pass-${escapeHtml(v.name)}" class="icon-button" type="button" aria-label="Show password" onclick="togglePassword('pass-${escapeHtml(v.name)}', 'toggle-pass-${escapeHtml(v.name)}')">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"></path>
-              <circle cx="12" cy="12" r="3"></circle>
-            </svg>
-          </button>
-        </span>
-        <button class="primary" onclick="unlock('${escapeHtml(v.name)}')">Unlock</button>
-        <button class="danger" onclick="lock('${escapeHtml(v.name)}')">Lock</button>
+        ${v.unlocked ? '' : `
+          <span class="password-field">
+            <input id="pass-${escapeHtml(v.name)}" type="password" placeholder="password" onkeydown="unlockOnEnter(event, '${escapeHtml(v.name)}')" />
+            <button id="toggle-pass-${escapeHtml(v.name)}" class="icon-button" type="button" aria-label="Show password" onclick="togglePassword('pass-${escapeHtml(v.name)}', 'toggle-pass-${escapeHtml(v.name)}')">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+              </svg>
+            </button>
+          </span>
+          <button class="primary" onclick="unlock('${escapeHtml(v.name)}')">Unlock</button>
+        `}
+        ${v.unlocked ? `<button class="danger" onclick="lock('${escapeHtml(v.name)}')">Lock</button>` : ''}
         <button class="danger" onclick="deleteVault('${escapeHtml(v.name)}')">Delete</button>
         ${v.unlocked ? `<a class="button secondary" href="${fileHash(v.name)}">Browse</a>` : ''}
       </div>`).join('') || '<div class="card muted">No vaults yet.</div>';
@@ -231,6 +233,12 @@ async function unlock(name) {
   } catch(e) {
     msg(e.message, 'bad');
   }
+}
+
+function unlockOnEnter(event, name) {
+  if (event.key !== 'Enter') return;
+  event.preventDefault();
+  unlock(name);
 }
 
 async function lock(name) {
