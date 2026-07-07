@@ -64,10 +64,14 @@ async function unmount(mountPath) {
 
 async function ensureMountDir(mountPath) {
   try {
+    if (existsSync(mountPath) && !await isMountPoint(mountPath)) {
+      rmSync(mountPath, { recursive: true, force: true });
+    }
     mkdirSync(mountPath, { recursive: true });
   } catch (e) {
     if (e.code !== 'ENOTCONN') throw e;
     await unmount(mountPath);
+    rmSync(mountPath, { recursive: true, force: true });
     mkdirSync(mountPath, { recursive: true });
   }
 }
@@ -115,7 +119,12 @@ app.post('/api/vaults/:name/unlock', async (req, reply) => {
     if (!existsSync(encryptedPath)) throw new Error('Vault not found.');
     await ensureMountDir(mountPath);
     if (await isMountPoint(mountPath)) return { ok: true, alreadyUnlocked: true };
-    await run('gocryptfs', ['-allow_other', encryptedPath, mountPath], { input: `${password}\n` });
+    try {
+      await run('gocryptfs', ['-allow_other', encryptedPath, mountPath], { input: `${password}\n` });
+    } catch (e) {
+      rmSync(mountPath, { recursive: true, force: true });
+      throw e;
+    }
     return { ok: true, unlockedPath: mountPath };
   } catch (e) {
     reply.code(400);
@@ -129,6 +138,7 @@ app.post('/api/vaults/:name/lock', async (req, reply) => {
     const mountPath = path.join(MOUNTS_DIR, name);
     if (!existsSync(mountPath)) return { ok: true };
     await unmount(mountPath);
+    rmSync(mountPath, { recursive: true, force: true });
     return { ok: true };
   } catch (e) {
     reply.code(400);
