@@ -218,8 +218,8 @@ app.post('/api/vaults/:name/lock', async (req, reply) => {
       return { ok: true, pendingImport: Boolean(importPath) };
     }
     await unmount(mountPath);
-    removeMountDir(mountPath);
-    return { ok: true };
+    const importPath = await movePlaintextAside(mountPath, name);
+    return { ok: true, pendingImport: Boolean(importPath) };
   } catch (e) {
     reply.code(400);
     return { ok: false, error: e.message };
