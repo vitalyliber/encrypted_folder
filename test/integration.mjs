@@ -145,8 +145,39 @@ async function testBinaryFilesSurviveLock() {
   }
 }
 
+async function testHostAddedFileOverwritesExistingVaultFile() {
+  const name = 'it-overwrite';
+  const filePath = path.join('data', 'unlocked', name, 'same-name.bin');
+  const oldBytes = Buffer.from([0x01, 0x02, 0x03]);
+  const newBytes = Buffer.from([0xff, 0x00, 0xee, 0x44]);
+
+  await createVault(name);
+  try {
+    await unlock(name);
+    dockerExec(`printf '\\001\\002\\003' > /data/unlocked/${name}/same-name.bin`);
+    await lock(name);
+
+    await unlock(name);
+    mkdirSync(path.dirname(filePath), { recursive: true });
+    writeFileSync(filePath, newBytes);
+    const expectedHash = sha256(filePath);
+
+    const lockResult = await lock(name);
+    assert.equal(lockResult.pendingImport, false);
+    assert.equal(lockResult.encryptedImport, true);
+
+    await unlock(name);
+    const actualHash = dockerExec(`sha256sum /data/unlocked/${name}/same-name.bin | cut -d' ' -f1`).trim();
+    assert.equal(actualHash, expectedHash);
+    assert.notEqual(actualHash, createHash('sha256').update(oldBytes).digest('hex'));
+  } finally {
+    await deleteVault(name);
+  }
+}
+
 await waitForApi();
 await testMountedFilesSurviveLock();
 await testPlaintextAddedWhileNotMountedIsImported();
 await testBinaryFilesSurviveLock();
+await testHostAddedFileOverwritesExistingVaultFile();
 console.log('integration tests passed');

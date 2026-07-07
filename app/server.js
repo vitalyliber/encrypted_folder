@@ -107,7 +107,7 @@ async function movePlaintextAside(mountPath, name) {
 
 function importPlaintext(importPath, mountPath) {
   if (!importPath) return false;
-  cpSync(importPath, mountPath, { recursive: true, force: false, errorOnExist: true });
+  cpSync(importPath, mountPath, { recursive: true, force: true });
   rmSync(importPath, { recursive: true, force: true });
   return true;
 }
