@@ -52,13 +52,14 @@ async function api(url, options = {}) {
   return data;
 }
 function msg(text, cls='muted') { document.getElementById('status').innerHTML = `<p class="${cls}">${text}</p>`; }
-function toggleNewPassword() {
-  const input = document.getElementById('newPass');
-  const button = document.getElementById('toggleNewPass');
+function togglePassword(inputId, buttonId) {
+  const input = document.getElementById(inputId);
+  const button = document.getElementById(buttonId);
   const visible = input.type === 'text';
   input.type = visible ? 'password' : 'text';
   button.setAttribute('aria-label', visible ? 'Show password' : 'Hide password');
 }
+function toggleNewPassword() { togglePassword('newPass', 'toggleNewPass'); }
 async function load() {
   const data = await api('/api/vaults');
   document.getElementById('vaults').innerHTML = data.vaults.map(v => `
@@ -66,7 +67,15 @@ async function load() {
       <h2>${v.name} ${v.unlocked ? '<span class="ok">unlocked</span>' : '<span class="bad">locked</span>'}</h2>
       <p class="muted">Encrypted: <code>${v.encryptedPath}</code></p>
       <p class="muted">Unlocked: <code>${v.unlockedPath}</code></p>
-      <input id="pass-${v.name}" type="password" placeholder="password" />
+      <span class="password-field">
+        <input id="pass-${v.name}" type="password" placeholder="password" />
+        <button id="toggle-pass-${v.name}" class="icon-button" type="button" aria-label="Show password" onclick="togglePassword('pass-${v.name}', 'toggle-pass-${v.name}')">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"></path>
+            <circle cx="12" cy="12" r="3"></circle>
+          </svg>
+        </button>
+      </span>
       <button class="primary" onclick="unlock('${v.name}')">Unlock</button>
       <button class="danger" onclick="lock('${v.name}')">Lock</button>
       <button class="danger" onclick="deleteVault('${v.name}')">Delete</button>
