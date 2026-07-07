@@ -144,13 +144,13 @@ startup still cleans `data/unlocked`.
 On Umbrel OS, open File Browser and look under:
 
 ```text
-Apps / umbrel-encrypted-folder / data
+Apps / vitalyliber-encrypted-folder / data
 ```
 
 Use:
 
 ```text
-Apps / umbrel-encrypted-folder / data / unlocked / <vault-name>
+Apps / vitalyliber-encrypted-folder / data / unlocked / <vault-name>
 ```
 
 as the folder where you read and add normal files after unlocking a vault.
@@ -158,7 +158,7 @@ as the folder where you read and add normal files after unlocking a vault.
 Do not manually edit:
 
 ```text
-Apps / umbrel-encrypted-folder / data / vaults / <vault-name>
+Apps / vitalyliber-encrypted-folder / data / vaults / <vault-name>
 ```
 
 That folder contains encrypted `gocryptfs` data.
@@ -218,11 +218,15 @@ The container needs FUSE access, so the Compose files include:
 This repository also contains an Umbrel community app package:
 
 ```text
-umbrel-encrypted-folder/
+umbrel-app-store.yml
+vitalyliber-encrypted-folder/
   umbrel-app.yml
   docker-compose.yml
   icon.svg
 ```
+
+The community store id is `vitalyliber`, so the app id and folder name use the
+required prefix: `vitalyliber-encrypted-folder`.
 
 After the Docker image is published to GitHub Container Registry, the repository
 can be added to Umbrel as a custom/community app repository:
@@ -239,8 +243,8 @@ ghcr.io/vitalyliber/encrypted-folder:0.1.0
 
 For a release:
 
-1. Update the app version in `umbrel-encrypted-folder/umbrel-app.yml`.
-2. Update the image tag in `umbrel-encrypted-folder/docker-compose.yml`.
+1. Update the app version in `vitalyliber-encrypted-folder/umbrel-app.yml`.
+2. Update the image tag in `vitalyliber-encrypted-folder/docker-compose.yml`.
 3. Push to GitHub so the Docker image workflow publishes the image.
 4. Refresh the custom app repository in Umbrel and install/update the app.
 
