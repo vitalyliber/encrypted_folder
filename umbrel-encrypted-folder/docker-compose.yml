@@ -1,0 +1,20 @@
+services:
+  app_proxy:
+    environment:
+      APP_HOST: umbrel-encrypted-folder_server_1
+      APP_PORT: 3000
+    container_name: umbrel-encrypted-folder_app_proxy_1
+
+  server:
+    image: ghcr.io/vitalyliber/encrypted-folder:0.1.0
+    restart: always
+    stop_grace_period: 2m
+    container_name: umbrel-encrypted-folder_server_1
+    devices:
+      - /dev/fuse:/dev/fuse
+    cap_add:
+      - SYS_ADMIN
+    security_opt:
+      - apparmor:unconfined
+    volumes:
+      - ${APP_DATA_DIR}/data:/data:rshared

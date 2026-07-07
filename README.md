@@ -213,6 +213,37 @@ The container needs FUSE access, so the Compose files include:
 - `apparmor:unconfined`
 - `rshared` bind mount propagation for `./data:/data`
 
+## Community App Repository
+
+This repository also contains an Umbrel community app package:
+
+```text
+umbrel-encrypted-folder/
+  umbrel-app.yml
+  docker-compose.yml
+  icon.svg
+```
+
+After the Docker image is published to GitHub Container Registry, the repository
+can be added to Umbrel as a custom/community app repository:
+
+```text
+https://github.com/vitalyliber/encrypted_folder
+```
+
+The app package uses:
+
+```text
+ghcr.io/vitalyliber/encrypted-folder:0.1.0
+```
+
+For a release:
+
+1. Update the app version in `umbrel-encrypted-folder/umbrel-app.yml`.
+2. Update the image tag in `umbrel-encrypted-folder/docker-compose.yml`.
+3. Push to GitHub so the Docker image workflow publishes the image.
+4. Refresh the custom app repository in Umbrel and install/update the app.
+
 ## Password Handling
 
 The app does not persist vault passwords.
