@@ -72,6 +72,18 @@ function contentTypeFor(name) {
   }[ext] || 'application/octet-stream';
 }
 
+function firstImageInDirectory(dirPath, relativePath) {
+  try {
+    const image = readdirSync(dirPath, { withFileTypes: true })
+      .filter(entry => entry.isFile() && isImageFile(entry.name))
+      .map(entry => entry.name)
+      .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))[0];
+    return image ? path.posix.join(relativePath, image) : null;
+  } catch {
+    return null;
+  }
+}
+
 function run(command, args, opts = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { ...opts, stdio: ['pipe', 'pipe', 'pipe'] });
@@ -303,6 +315,7 @@ app.get('/api/vaults/:name/files', async (req, reply) => {
         const fullPath = path.join(dirPath, entry.name);
         const stats = statSync(fullPath);
         const type = entry.isDirectory() ? 'directory' : 'file';
+        const previewPath = type === 'directory' ? firstImageInDirectory(fullPath, relativePath) : null;
         return {
           name: entry.name,
           path: relativePath,
@@ -310,6 +323,7 @@ app.get('/api/vaults/:name/files', async (req, reply) => {
           size: stats.size,
           modifiedAt: stats.mtime.toISOString(),
           isImage: type === 'file' && isImageFile(entry.name),
+          previewUrl: previewPath ? `/api/vaults/${encodeURIComponent(name)}/file?path=${encodeURIComponent(previewPath)}` : null,
           url: type === 'file' ? `/api/vaults/${encodeURIComponent(name)}/file?path=${encodeURIComponent(relativePath)}` : null,
         };
       })

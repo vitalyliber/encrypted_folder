@@ -297,10 +297,13 @@ function renderEntries(entries) {
   const galleryIndex = entries.filter(entry => entry.isImage).map(entry => entry.path);
   document.getElementById('fileGrid').innerHTML = entries.map(entry => {
     if (entry.type === 'directory') {
+      const preview = entry.previewUrl
+        ? `<img src="${entry.previewUrl}" loading="lazy" alt="${escapeHtml(entry.name)} preview" />`
+        : 'Folder';
       return `
         <div class="entry">
           <button onclick="openFolderEncoded('${encodeURIComponent(state.vault)}', '${encodeURIComponent(entry.path)}')">
-            <div class="thumb">Folder</div>
+            <div class="thumb">${preview}</div>
             <div class="entry-name">${escapeHtml(entry.name)}</div>
             <div class="entry-meta">Folder</div>
           </button>

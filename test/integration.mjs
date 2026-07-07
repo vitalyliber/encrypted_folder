@@ -207,6 +207,12 @@ async function testUnlockedBrowserListsNestedImages() {
 
     const bytes = await raw(image.url);
     assert.equal(bytes.toString(), 'browser-image');
+
+    const photos = await api(`/api/vaults/${name}/files?path=photos`);
+    const nestedFolder = photos.entries.find(entry => entry.name === 'nested');
+    assert.equal(typeof nestedFolder?.previewUrl, 'string');
+    const previewBytes = await raw(nestedFolder.previewUrl);
+    assert.equal(previewBytes.toString(), 'browser-image');
   } finally {
     await deleteVault(name);
   }
